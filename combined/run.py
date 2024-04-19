@@ -192,7 +192,7 @@ for t in logTime[1:]:
             [np.array(linJac)], 
             [np.array(angJac)[2,:]]  
         ])
-        # print("J", J)
+        print("J", J)
 
         th1, th2, d3, th4 = jPos
 
@@ -210,13 +210,14 @@ for t in logTime[1:]:
         rotation_angle = th1 + th2 + th4
 
         J = np.array([
-            [-L1*np.sin(th1) - L2*np.sin(th1 + th2) - L3*np.sin(th1 + th2 + th4), -L2*np.sin(th1 + th2) - L3*np.sin(th1 + th2 + th4), 0, 0],
-            [L1*np.cos(th1) + L2*np.cos(th1 + th2) + L3*np.cos(th1 + th2 + th4), L2*np.cos(th1 + th2) + L3*np.cos(th1 + th2 + th4), 0, 0],
+            [-L1*np.sin(th1) - L2*np.sin(th1 + th2), -L2*np.sin(th1 + th2), 0, 0],
+            [L1*np.cos(th1) + L2*np.cos(th1 + th2), L2*np.cos(th1 + th2), 0, 0],
             [0, 0, 1, 0],
             [1, 1, 0, 1]
         ])
 
-        # print ("J2", J)
+
+        print ("J2", J)
         
         dq = (np.linalg.inv(J) @ w).flatten()[[1, 0, 2, 3]] # dq = (np.linalg.inv(J) @ w).flatten()[[1,0,2]]
         dq[2] = -dq[2]
