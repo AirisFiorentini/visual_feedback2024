@@ -87,11 +87,11 @@ p.resetDebugVisualizerCamera(
 p.setGravity(0,0,-10)
 
 #Загрузка моделей и настройка симуляции:
-boxId = p.loadURDF("simple1.urdf.xml", useFixedBase=True)
+boxId = p.loadURDF("combined/simple1.urdf.xml", useFixedBase=True)
 
 # add aruco cube and aruco texture
-c = p.loadURDF('aruco.urdf', (0.5, 0.5, 0.0), useFixedBase=True)
-x = p.loadTexture('aruco_cube.png')
+c = p.loadURDF('combined/aruco.urdf', (0.5, 0.5, 0.0), useFixedBase=True)
+x = p.loadTexture('combined/aruco_cube.png')
 p.changeVisualShape(c, -1, textureUniqueId=x)
 
 numJoints = p.getNumJoints(boxId)
@@ -105,9 +105,6 @@ print(p.isNumpyEnabled())
 p.setJointMotorControlArray(bodyIndex=boxId, jointIndices=jointIndices, targetPositions=[0.0, 1.5708, 0.01, 0.0], controlMode=p.POSITION_CONTROL)
 for _ in range(100):
     p.stepSimulation()
-
-# while True:
-#     p.stepSimulation()
 
 updateCamPos(camera)
 img = camera.get_frame()
@@ -176,75 +173,63 @@ for t in logTime[1:]:
             w = -coef * L0T @ e
             # print("w", w)
 
-    jStates = p.getJointStates(boxId, jointIndices=jointIndices)
-    jPos = [state[0] for state in jStates]
-    jVel = [state[1] for state in jStates]
-    (linJac,angJac) = p.calculateJacobian(
-        bodyUniqueId = boxId, 
-        linkIndex = eefLinkIdx, 
-        localPosition = [0,0,0],
-        objPositions = jPos,
-        objVelocities = [0,0,0,0],
-        objAccelerations = [0,0,0,0]
-    )
-    # print("linJac", linJac) 
-    # print("angJac", angJac)
+        jStates = p.getJointStates(boxId, jointIndices=jointIndices)
+        jPos = [state[0] for state in jStates]  
+        # print(jPos)
+        jVel = [state[1] for state in jStates]  
+        (linJac,angJac) = p.calculateJacobian(
+            bodyUniqueId = boxId, 
+            linkIndex = eefLinkIdx, 
+            localPosition = [0,0,0],
+            objPositions = jPos,
+            objVelocities = [0,0,0,0],
+            objAccelerations = [0,0,0,0]
+        )
+        # print("linJac", linJac) 
+        # print("angJac", angJac)
 
-    # J = np.block([
-    #     [np.array(linJac)[:2,:2], np.zeros((2,1))],
-    #     [np.array(angJac)[2,:]]
-    # ])
+        J = np.block([
+            [np.array(linJac)], 
+            [np.array(angJac)[2,:]]  
+        ])
+        # print("J", J)
 
-    J = np.block([
-        [np.array(linJac)], 
-        [np.array(angJac)[2,:]]  
-    ])
-    # print("J", J)
-    
-    dq = (np.linalg.inv(J) @ w).flatten()[[1, 0, 2, 3]] # dq = (np.linalg.inv(J) @ w).flatten()[[1,0,2]]
-    dq[2] = -dq[2]
-    dq[3] = -dq[3]
+        th1, th2, d3, th4 = jPos
 
-    # Убеждаемся, что dq содержит четыре компоненты
-    assert len(dq) == 4, "Number of target velocities should be 4"
-    
-    p.setJointMotorControlArray(bodyIndex=boxId, jointIndices=jointIndices, targetVelocities=dq, controlMode=p.VELOCITY_CONTROL)
-    # time.sleep(0.01)
+        L1 = L
+        L2 = L  # 0.4
+        L3 = L
+
+        # Положение конечного звена
+        # x = L1*np.cos(th1) + L2*np.cos(th1 + th2) + L3*np.cos(th1 + th2 + th4)
+        # y = L1*np.sin(th1) + L2*np.sin(th1 + th2) + L3*np.sin(th1 + th2 + th4)
+        # z = d3
+
+        # Углы поворота конечного звена
+        # Все вращательные звенья вращаются вокруг оси z
+        rotation_angle = th1 + th2 + th4
+
+        J = np.array([
+            [-L1*np.sin(th1) - L2*np.sin(th1 + th2) - L3*np.sin(th1 + th2 + th4), -L2*np.sin(th1 + th2) - L3*np.sin(th1 + th2 + th4), 0, 0],
+            [L1*np.cos(th1) + L2*np.cos(th1 + th2) + L3*np.cos(th1 + th2 + th4), L2*np.cos(th1 + th2) + L3*np.cos(th1 + th2 + th4), 0, 0],
+            [0, 0, 1, 0],
+            [1, 1, 0, 1]
+        ])
+
+        # print ("J2", J)
+        
+        dq = (np.linalg.inv(J) @ w).flatten()[[1, 0, 2, 3]] # dq = (np.linalg.inv(J) @ w).flatten()[[1,0,2]]
+        dq[2] = -dq[2]
+        dq[3] = -dq[3]
+
+        # Убеждаемся, что dq содержит четыре компоненты
+        assert len(dq) == 4, "Number of target velocities should be 4"
+        
+        p.setJointMotorControlArray(bodyIndex=boxId, jointIndices=jointIndices, targetVelocities=dq, controlMode=p.VELOCITY_CONTROL)
+        # time.sleep(0.01)
 
 # Завершение симуляции и отключение от pybullet
 p.disconnect()
-
-import matplotlib.pyplot as plt
-
-# # Преобразуем списки в массивы numpy для удобства работы
-# positions = np.array(positions)
-# orientations = np.array(orientations)
-
-# # Построение графиков
-# plt.figure(figsize=(12, 8))
-
-# # Графики положения
-# plt.subplot(2, 1, 1)
-# plt.plot(logTime[1:], positions[:, 0], label='X Position')
-# plt.plot(logTime[1:], positions[:, 1], label='Y Position')
-# plt.plot(logTime[1:], positions[:, 2], label='Z Position')
-# plt.xlabel('Time')
-# plt.ylabel('Position')
-# plt.title('XYZ Position of Robot End Effector')
-# plt.legend()
-
-# # График угла фланца
-# plt.subplot(2, 1, 2)
-# plt.plot(logTime[1:], orientations[:, 0], label='Roll')
-# plt.plot(logTime[1:], orientations[:, 1], label='Pitch')
-# plt.plot(logTime[1:], orientations[:, 2], label='Yaw')
-# plt.xlabel('Time')
-# plt.ylabel('Angle (degrees)')
-# plt.title('Orientation of Robot End Effector')
-# plt.legend()
-
-# plt.tight_layout()
-# plt.show()
 
 import matplotlib.pyplot as plt
 import numpy as np
